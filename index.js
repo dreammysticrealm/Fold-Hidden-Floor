@@ -83,6 +83,10 @@ function createDetailsForGroup(group) {
     const summary = document.createElement('summary');
     summary.className = 'st-hfc-summary';
 
+    const kicker = document.createElement('span');
+    kicker.className = 'st-hfc-kicker';
+    kicker.textContent = 'Hidden sequence';
+
     const title = document.createElement('span');
     title.className = 'st-hfc-title';
     title.textContent = `已隐藏${group.length}层`;
@@ -104,7 +108,7 @@ function createDetailsForGroup(group) {
     hint.className = 'st-hfc-hint';
     hint.textContent = '点击以展开';
 
-    summary.append(title, range, names, preview, hint);
+    summary.append(kicker, title, range, names, preview, hint);
     details.append(summary);
 
     details.addEventListener('toggle', () => syncGroupVisibility(details, group));
