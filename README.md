@@ -36,7 +36,7 @@
 * 你希望连续隐藏楼层合并成一组，而不是每层单独折叠
 * 你想要一个类似HTML`<details>`的展开/折叠效果
 
-## 安装方式1:从GitHub安装
+## 安装方式1：从GitHub安装
 
 这是推荐安装方式。
 
@@ -59,7 +59,7 @@ https://github.com/dreammysticrealm/ST-HiddenFloorCollapse
 /hfc-refresh
 ```
 
-## 安装方式2:手动安装
+## 安装方式2：手动安装
 
 如果Install from GitHub不可用，也可以手动安装。
 
@@ -197,7 +197,7 @@ Click the fold card once to expand the hidden messages. Click it again to collap
 * You want consecutive hidden messages to become one group instead of many separate folds
 * You want a details-like expand/collapse UI
 
-## Installation Method 1:Install from GitHub
+## Installation Method 1: Install from GitHub
 
 This is the recommended method.
 
@@ -220,7 +220,7 @@ If nothing changes after installation, make sure the chat actually contains mess
 /hfc-refresh
 ```
 
-## Installation Method 2:Manual installation
+## Installation Method 2: Manual installation
 
 If Install from GitHub is not available, you can install the extension manually.
 
