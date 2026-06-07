@@ -37,6 +37,7 @@
     display: grid;
     grid-template-columns: auto 1fr auto;
     grid-template-areas:
+        "kicker kicker hint"
         "title title range"
         "names names names"
         "preview preview preview";
@@ -75,6 +76,15 @@
     background: linear-gradient(90deg, var(--st-hfc-accent), transparent 75%);
     opacity: 0.65;
     margin-top: 0.42rem;
+}
+
+#chat .st-hfc-kicker {
+    grid-area: kicker;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    font-size: 0.62rem;
+    font-weight: 800;
+    color: var(--st-hfc-accent);
 }
 
 #chat .st-hfc-title {
