@@ -1,8 +1,8 @@
 # Fold Hidden Floor
 
-A small SillyTavern extension that automatically collapses consecutive hidden chat messages into one details-like fold.
+A small SillyTavern extension that automatically collapses consecutive hidden chat messages into magazine-style folds.
 
-适用于 SillyTavern 里被 **Hide from prompt / `/hide`** 标记的楼层。
+适用于 SillyTavern 里被 **Hide from prompt / `/hide`** 标记的楼层。  
 如果连续好几层都被 hidden，它们会被合并成一个折叠块，而不是一层一层占屏幕空间。
 
 ## Preview
@@ -24,11 +24,14 @@ After:
 ```text
 #20 normal
 
-▸ 🙈 已隐藏 3 层：#21–#23
+HIDDEN   3 hidden floors                         #21 — #23
+         “Preview text from the first hidden floor..."
+         Character × 2 · User × 1                ＋ 展开
 
 #24 normal
 
-▸ 🙈 已隐藏 1 层：#25
+HIDDEN   1 hidden floor                          #25
+         “Preview text from the hidden floor...” ＋ 展开
 
 #26 normal
 ```
@@ -37,13 +40,14 @@ Click the fold row to expand or collapse the hidden messages.
 
 ## Features
 
-* Automatically detects hidden SillyTavern messages.
-* Consecutive hidden messages are grouped into one fold.
-* Non-consecutive hidden messages become separate folds.
-* Click to expand/collapse.
-* Does not edit chat files.
-* Does not change prompt inclusion rules.
-* Works as a normal third-party SillyTavern extension.
+- Automatically detects hidden SillyTavern messages.
+- Consecutive hidden messages are grouped into one fold.
+- Non-consecutive hidden messages become separate folds.
+- Native `<details>` behavior for click-to-expand.
+- Magazine-style visual design instead of bubble-style design.
+- Does not edit chat files.
+- Does not change prompt inclusion rules.
+- Works as a normal third-party SillyTavern extension.
 
 ## Install
 
@@ -118,7 +122,7 @@ Then refresh SillyTavern.
 
 This extension is UI-only.
 
-It only changes how hidden messages are displayed on screen.
+It only changes how hidden messages are displayed on screen.  
 It does not unhide messages, delete messages, modify chat history, or change what goes into the prompt.
 
 Hidden messages are still hidden from prompt according to SillyTavern’s own behavior.
