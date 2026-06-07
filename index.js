@@ -63,7 +63,7 @@ function summarizeNames(group) {
     }
     return Array.from(counts.entries())
         .slice(0, 4)
-        .map(([name, count]) => `${name} ×${count}`)
+        .map(([name, count]) => `${name} × ${count}`)
         .join(' / ');
 }
 
