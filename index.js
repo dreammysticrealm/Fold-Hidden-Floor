@@ -1,448 +1,291 @@
-import {
-    chat,
-    chatElement,
-    eventSource,
-    event_types,
-} from '/script.js';
+// Hidden Floor Collapse for SillyTavern
+// Groups consecutive hidden (is_system="true") chat messages into a details-like fold.
 
-import {
-    extension_settings,
-    saveSettingsDebounced,
-} from '/scripts/extensions.js';
-
+import { eventSource, event_types } from '/script.js';
+import { SlashCommand } from '/scripts/slash-commands/SlashCommand.js';
 import { SlashCommandParser } from '/scripts/slash-commands/SlashCommandParser.js';
 
-const MODULE_NAME = 'hiddenFloorFold';
-
-const GROUP_CLASS = 'hff-group';
-const SUMMARY_CLASS = 'hff-summary';
-const MESSAGE_CLASS = 'hff-hidden-message';
-const COLLAPSED_CLASS = 'hff-collapsed';
-
-const DEFAULT_SETTINGS = {
-    enabled: true,
-    defaultOpen: false,
-    previewChars: 86,
-    excludeSmallSystem: true,
-};
+const MODULE_NAME = 'hidden-floor-collapse';
+const CHAT_SELECTOR = '#chat';
+const DETAILS_CLASS = 'st-hfc-details';
+const GROUPED_CLASS = 'st-hfc-grouped-message';
+const COLLAPSED_CLASS = 'st-hfc-collapsed-message';
+const HIDDEN_SELECTOR = '.mes[is_system="true"]';
 
 let observer = null;
 let scheduled = false;
-let rebuilding = false;
+let suppressMutationObserver = false;
+let initialized = false;
 
-/** Remember manually opened groups by stable "firstId-lastId" key. */
-const openGroups = new Set();
-
-function getSettings() {
-    extension_settings[MODULE_NAME] ??= {};
-    Object.assign(extension_settings[MODULE_NAME], {
-        ...DEFAULT_SETTINGS,
-        ...extension_settings[MODULE_NAME],
-    });
-    return extension_settings[MODULE_NAME];
+function getChatElement() {
+    return document.querySelector(CHAT_SELECTOR);
 }
 
-function saveSettings() {
-    saveSettingsDebounced?.();
+function isOurDetails(node) {
+    return node instanceof HTMLElement && node.classList.contains(DETAILS_CLASS);
 }
 
-function getChatRoot() {
-    return chatElement?.[0] ?? document.getElementById('chat');
-}
+function isCollapsibleHiddenMessage(node) {
+    if (!(node instanceof HTMLElement)) return false;
+    if (!node.classList.contains('mes')) return false;
+    if (node.getAttribute('is_system') !== 'true') return false;
 
-function getMessageId(element) {
-    const id = Number(element?.getAttribute?.('mesid'));
-    return Number.isInteger(id) ? id : null;
-}
-
-function getMessageForElement(element) {
-    const id = getMessageId(element);
-    return id === null ? null : chat[id];
-}
-
-function normalizeText(text, maxLength) {
-    const normalized = String(text ?? '')
-        .replace(/<[^>]*>/g, '')
-        .replace(/\s+/g, ' ')
-        .trim();
-
-    if (!normalized) return '';
-
-    return normalized.length > maxLength
-        ? `${normalized.slice(0, maxLength)}…`
-        : normalized;
-}
-
-function isFoldableHiddenMessage(element) {
-    if (!(element instanceof HTMLElement)) return false;
-    if (!element.classList.contains('mes')) return false;
-    if (element.querySelector('#curEditTextarea, .edit_textarea')) return false;
-
-    const message = getMessageForElement(element);
-
-    // SillyTavern's hide operation marks chat[messageId].is_system = true
-    // and mirrors that state onto .mes[is_system="true"].
-    const hiddenByDom = element.getAttribute('is_system') === 'true';
-    const hiddenByData = message?.is_system === true;
-    if (!hiddenByDom && !hiddenByData) return false;
-
-    const settings = getSettings();
-
-    // Avoid folding ST's tiny internal notices.
-    if (settings.excludeSmallSystem && message?.extra?.isSmallSys) return false;
+    // Leave SillyTavern's own small system/tool blocks alone.
+    if (node.classList.contains('smallSysMes')) return false;
+    if (node.classList.contains('toolCall')) return false;
+    if (node.getAttribute('type') === 'system') return false;
 
     return true;
 }
 
-function getTopLevelMessages() {
-    const root = getChatRoot();
-    if (!root) return [];
-
-    return Array.from(root.children)
-        .filter(element => element instanceof HTMLElement && element.classList.contains('mes'));
+function getMessageId(messageElement) {
+    const raw = messageElement.getAttribute('mesid');
+    const number = Number(raw);
+    return Number.isFinite(number) ? number : null;
 }
 
-function cleanupGroups() {
-    const root = getChatRoot();
-    if (!root) return;
-
-    root.querySelectorAll(`.${GROUP_CLASS}`).forEach(element => element.remove());
-
-    root.querySelectorAll(`.${MESSAGE_CLASS}, .${COLLAPSED_CLASS}`).forEach(element => {
-        element.classList.remove(MESSAGE_CLASS, COLLAPSED_CLASS);
-        delete element.dataset.hffKey;
-        delete element.dataset.hffIndex;
-    });
+function getMessageName(messageElement) {
+    const nameFromAttr = messageElement.getAttribute('ch_name');
+    const nameFromDom = messageElement.querySelector('.ch_name .name_text')?.textContent?.trim();
+    return nameFromDom || nameFromAttr || 'Unknown';
 }
 
-function buildGroups(messageElements) {
-    const groups = [];
-    let current = [];
-
-    const flush = () => {
-        if (!current.length) return;
-
-        const ids = current
-            .map(getMessageId)
-            .filter(id => id !== null);
-
-        if (ids.length) {
-            groups.push({
-                key: `${ids[0]}-${ids[ids.length - 1]}`,
-                ids,
-                elements: current,
-            });
-        }
-
-        current = [];
-    };
-
-    for (const element of messageElements) {
-        if (isFoldableHiddenMessage(element)) {
-            current.push(element);
-        } else {
-            flush();
-        }
-    }
-
-    flush();
-    return groups;
+function getMessagePreview(messageElement) {
+    const text = messageElement.querySelector('.mes_text')?.textContent || '';
+    return text.replace(/\s+/g, ' ').trim();
 }
 
-function summarizeAuthors(ids) {
+function summarizeNames(group) {
     const counts = new Map();
-
-    for (const id of ids) {
-        const message = chat[id];
-        const name = message?.name || (message?.is_user ? 'User' : 'Assistant');
-        counts.set(name, (counts.get(name) ?? 0) + 1);
+    for (const message of group) {
+        const name = getMessageName(message);
+        counts.set(name, (counts.get(name) || 0) + 1);
     }
-
     return Array.from(counts.entries())
-        .slice(0, 5)
-        .map(([name, count]) => `${name} × ${count}`)
-        .join(' · ');
+        .slice(0, 4)
+        .map(([name, count]) => `${name} ×${count}`)
+        .join(' / ');
 }
 
-function setGroupCollapsed(key, shouldCollapse) {
-    const root = getChatRoot();
-    if (!root) return;
-
-    const escapedKey = CSS.escape(key);
-    const messages = root.querySelectorAll(`.${MESSAGE_CLASS}[data-hff-key="${escapedKey}"]`);
-
-    messages.forEach(element => {
-        element.classList.toggle(COLLAPSED_CLASS, shouldCollapse);
-    });
+function summarizeRange(group) {
+    const firstId = getMessageId(group[0]);
+    const lastId = getMessageId(group[group.length - 1]);
+    if (firstId === null || lastId === null) return '';
+    return firstId === lastId ? `#${firstId}` : `#${firstId}–#${lastId}`;
 }
 
-function updateDetailsLabel(details) {
-    const action = details.querySelector('.hff-action');
-    if (action) {
-        action.textContent = details.open ? '收起' : '展开';
-    }
-
-    const marker = details.querySelector('.hff-marker');
-    if (marker) {
-        marker.textContent = details.open ? 'OPEN' : 'HIDDEN';
-    }
-
-    details.setAttribute('aria-expanded', String(details.open));
-}
-
-function makeDetails(group, isOpen) {
-    const [firstId, lastId] = [group.ids[0], group.ids[group.ids.length - 1]];
-    const settings = getSettings();
-
+function createDetailsForGroup(group) {
     const details = document.createElement('details');
-    details.className = GROUP_CLASS;
-    details.dataset.hffKey = group.key;
-    details.dataset.hffIds = group.ids.join(',');
-    details.open = isOpen;
-    details.setAttribute('aria-expanded', String(isOpen));
+    details.className = DETAILS_CLASS;
+    details.dataset.count = String(group.length);
+    details.dataset.range = summarizeRange(group);
 
     const summary = document.createElement('summary');
-    summary.className = SUMMARY_CLASS;
-    summary.title = isOpen ? '点击收起隐藏楼层' : '点击展开隐藏楼层';
+    summary.className = 'st-hfc-summary';
 
-    const marker = document.createElement('span');
-    marker.className = 'hff-marker';
-    marker.textContent = isOpen ? 'OPEN' : 'HIDDEN';
+    const kicker = document.createElement('span');
+    kicker.className = 'st-hfc-kicker';
+    kicker.textContent = 'Hidden sequence';
 
     const title = document.createElement('span');
-    title.className = 'hff-title';
-    title.textContent = `${group.ids.length} hidden floor${group.ids.length > 1 ? 's' : ''}`;
+    title.className = 'st-hfc-title';
+    title.textContent = `已隐藏 ${group.length} 层`;
 
     const range = document.createElement('span');
-    range.className = 'hff-range';
-    range.textContent = `#${firstId}${firstId === lastId ? '' : ` — #${lastId}`}`;
+    range.className = 'st-hfc-range';
+    range.textContent = summarizeRange(group);
 
-    const authors = document.createElement('span');
-    authors.className = 'hff-authors';
-    authors.textContent = summarizeAuthors(group.ids);
+    const names = document.createElement('span');
+    names.className = 'st-hfc-names';
+    names.textContent = summarizeNames(group);
 
     const preview = document.createElement('span');
-    preview.className = 'hff-preview';
-    const previewText = normalizeText(chat[firstId]?.mes, settings.previewChars);
-    preview.textContent = previewText ? previewText : 'Hidden messages folded here.';
+    preview.className = 'st-hfc-preview';
+    const firstPreview = getMessagePreview(group[0]);
+    preview.textContent = firstPreview ? `“${firstPreview.slice(0, 88)}${firstPreview.length > 88 ? '…' : ''}”` : '点击展开查看隐藏楼层';
 
-    const action = document.createElement('span');
-    action.className = 'hff-action';
-    action.textContent = isOpen ? '收起' : '展开';
+    const hint = document.createElement('span');
+    hint.className = 'st-hfc-hint';
+    hint.textContent = '展开';
 
-    summary.append(marker, title, range, authors, preview, action);
+    summary.append(kicker, title, range, names, preview, hint);
     details.append(summary);
 
-    // Native <details> handles the click. We only mirror that open state to the real .mes siblings.
-    details.addEventListener('toggle', () => {
-        if (details.open) {
-            openGroups.add(group.key);
-        } else {
-            openGroups.delete(group.key);
-        }
-
-        setGroupCollapsed(group.key, !details.open);
-        updateDetailsLabel(details);
-    });
+    details.addEventListener('toggle', () => syncGroupVisibility(details, group));
 
     return details;
 }
 
-function rebuild() {
-    const root = getChatRoot();
-    if (!root) return;
+function syncGroupVisibility(details, group) {
+    const collapsed = !details.open;
+    details.classList.toggle('is-open', details.open);
+    const hint = details.querySelector('.st-hfc-hint');
+    if (hint) hint.textContent = details.open ? '折叠' : '展开';
 
-    rebuilding = true;
-
-    try {
-        cleanupGroups();
-
-        const settings = getSettings();
-        if (!settings.enabled) return;
-
-        const groups = buildGroups(getTopLevelMessages());
-
-        for (const group of groups) {
-            const isOpen = settings.defaultOpen || openGroups.has(group.key);
-            const details = makeDetails(group, isOpen);
-
-            group.elements[0].before(details);
-
-            group.elements.forEach((element, index) => {
-                element.classList.add(MESSAGE_CLASS);
-                element.classList.toggle(COLLAPSED_CLASS, !isOpen);
-                element.dataset.hffKey = group.key;
-                element.dataset.hffIndex = String(index);
-            });
-        }
-    } finally {
-        rebuilding = false;
+    for (const message of group) {
+        message.classList.add(GROUPED_CLASS);
+        message.classList.toggle(COLLAPSED_CLASS, collapsed);
     }
 }
 
-function scheduleRebuild() {
-    if (rebuilding || scheduled) return;
+function cleanupExistingFolds(chat) {
+    chat.querySelectorAll(`:scope > .${DETAILS_CLASS}`).forEach(node => node.remove());
+    chat.querySelectorAll(`:scope > .mes.${GROUPED_CLASS}, :scope > .mes.${COLLAPSED_CLASS}`).forEach(node => {
+        node.classList.remove(GROUPED_CLASS, COLLAPSED_CLASS);
+    });
+}
 
+function findHiddenGroups(chat) {
+    const groups = [];
+    let current = [];
+
+    for (const child of Array.from(chat.children)) {
+        if (isOurDetails(child)) continue;
+
+        if (isCollapsibleHiddenMessage(child)) {
+            current.push(child);
+            continue;
+        }
+
+        if (current.length) {
+            groups.push(current);
+            current = [];
+        }
+    }
+
+    if (current.length) groups.push(current);
+    return groups;
+}
+
+function applyHiddenFloorCollapse() {
+    const chat = getChatElement();
+    if (!chat) return;
+
+    suppressMutationObserver = true;
+    try {
+        cleanupExistingFolds(chat);
+        const groups = findHiddenGroups(chat);
+
+        for (const group of groups) {
+            const details = createDetailsForGroup(group);
+            group[0].before(details);
+            syncGroupVisibility(details, group);
+        }
+    } finally {
+        requestAnimationFrame(() => {
+            suppressMutationObserver = false;
+        });
+    }
+}
+
+function scheduleApply(reason = 'unknown') {
+    if (scheduled) return;
     scheduled = true;
     requestAnimationFrame(() => {
         scheduled = false;
-        rebuild();
+        try {
+            applyHiddenFloorCollapse();
+        } catch (error) {
+            console.error(`[${MODULE_NAME}] Failed to apply folds after ${reason}:`, error);
+        }
     });
 }
 
-function observeChat() {
-    const root = getChatRoot();
-    if (!root || observer) return;
+function setupMutationObserver() {
+    const chat = getChatElement();
+    if (!chat || observer) return;
 
     observer = new MutationObserver((mutations) => {
-        if (rebuilding) return;
+        if (suppressMutationObserver) return;
 
-        const relevant = mutations.some(mutation => {
+        const relevant = mutations.some((mutation) => {
             if (mutation.type === 'childList') return true;
-            if (mutation.type === 'attributes') {
-                const target = mutation.target;
-                return target instanceof HTMLElement && target.classList.contains('mes');
-            }
+            if (mutation.type === 'attributes' && mutation.attributeName === 'is_system') return true;
             return false;
         });
 
-        if (relevant) scheduleRebuild();
+        if (relevant) scheduleApply('mutation');
     });
 
-    observer.observe(root, {
+    observer.observe(chat, {
         childList: true,
         subtree: false,
         attributes: true,
-        attributeFilter: ['is_system', 'mesid'],
+        attributeFilter: ['is_system'],
     });
 }
 
-function showToast(message, type = 'info') {
-    try {
-        globalThis.toastr?.[type]?.(message, 'Fold Hidden Floor');
-    } catch {
-        console.log(`[Fold Hidden Floor] ${message}`);
-    }
+function openAllFolds() {
+    document.querySelectorAll(`${CHAT_SELECTOR} > .${DETAILS_CLASS}`).forEach((details) => {
+        if (details instanceof HTMLDetailsElement) details.open = true;
+    });
 }
 
-function registerCommands() {
-    SlashCommandParser.addCommand(
-        'hiddenfold',
-        (_args, input) => {
-            const settings = getSettings();
-            const action = String(input ?? '').trim().toLowerCase() || 'toggle';
-
-            if (['on', 'enable', 'enabled', 'true', '1'].includes(action)) {
-                settings.enabled = true;
-                saveSettings();
-                scheduleRebuild();
-                showToast('已开启 hidden 楼层自动折叠。', 'success');
-                return 'on';
-            }
-
-            if (['off', 'disable', 'disabled', 'false', '0'].includes(action)) {
-                settings.enabled = false;
-                saveSettings();
-                cleanupGroups();
-                showToast('已关闭 hidden 楼层自动折叠。', 'info');
-                return 'off';
-            }
-
-            if (['open', 'defaultopen'].includes(action)) {
-                settings.defaultOpen = true;
-                saveSettings();
-                scheduleRebuild();
-                showToast('默认展开 hidden 折叠组。', 'info');
-                return 'defaultOpen';
-            }
-
-            if (['closed', 'close', 'defaultclosed'].includes(action)) {
-                settings.defaultOpen = false;
-                saveSettings();
-                scheduleRebuild();
-                showToast('默认收起 hidden 折叠组。', 'info');
-                return 'defaultClosed';
-            }
-
-            if (['refresh', 'reload'].includes(action)) {
-                scheduleRebuild();
-                return 'refreshed';
-            }
-
-            settings.enabled = !settings.enabled;
-            saveSettings();
-
-            if (settings.enabled) {
-                scheduleRebuild();
-                showToast('已开启 hidden 楼层自动折叠。', 'success');
-                return 'on';
-            }
-
-            cleanupGroups();
-            showToast('已关闭 hidden 楼层自动折叠。', 'info');
-            return 'off';
-        },
-        [],
-        `
-        <div>Fold consecutive hidden messages into magazine-style details rows.</div>
-        <div>
-            <strong>Examples:</strong>
-            <ul>
-                <li><pre><code>/hiddenfold on</code></pre></li>
-                <li><pre><code>/hiddenfold off</code></pre></li>
-                <li><pre><code>/hiddenfold toggle</code></pre></li>
-                <li><pre><code>/hiddenfold closed</code></pre></li>
-                <li><pre><code>/hiddenfold open</code></pre></li>
-            </ul>
-        </div>
-        `,
-    );
-
-    SlashCommandParser.addCommand(
-        'hiddenfold-refresh',
-        () => {
-            scheduleRebuild();
-            return 'refreshed';
-        },
-        [],
-        'Refresh hidden message folds.',
-    );
+function closeAllFolds() {
+    document.querySelectorAll(`${CHAT_SELECTOR} > .${DETAILS_CLASS}`).forEach((details) => {
+        if (details instanceof HTMLDetailsElement) details.open = false;
+    });
 }
 
-function hookEvents() {
-    const events = [
+function registerSlashCommands() {
+    SlashCommandParser.addCommandObject(SlashCommand.fromProps({
+        name: 'hfc-refresh',
+        aliases: ['hidden-fold-refresh'],
+        callback: () => {
+            scheduleApply('slash-refresh');
+            return 'true';
+        },
+        helpString: 'Rebuild hidden-message fold groups.',
+    }));
+
+    SlashCommandParser.addCommandObject(SlashCommand.fromProps({
+        name: 'hfc-open',
+        aliases: ['hidden-fold-open'],
+        callback: () => {
+            openAllFolds();
+            return 'true';
+        },
+        helpString: 'Open all hidden-message fold groups.',
+    }));
+
+    SlashCommandParser.addCommandObject(SlashCommand.fromProps({
+        name: 'hfc-close',
+        aliases: ['hidden-fold-close'],
+        callback: () => {
+            closeAllFolds();
+            return 'true';
+        },
+        helpString: 'Close all hidden-message fold groups.',
+    }));
+}
+
+export function init() {
+    if (initialized) return;
+    initialized = true;
+
+    setupMutationObserver();
+    registerSlashCommands();
+
+    const refreshEvents = [
         event_types.APP_READY,
         event_types.CHAT_CHANGED,
         event_types.CHAT_LOADED,
         event_types.MORE_MESSAGES_LOADED,
         event_types.MESSAGE_RECEIVED,
+        event_types.MESSAGE_SENT,
         event_types.MESSAGE_UPDATED,
+        event_types.MESSAGE_EDITED,
         event_types.MESSAGE_DELETED,
+        event_types.MESSAGE_SWIPED,
+        event_types.MESSAGE_SWIPE_DELETED,
+        event_types.CHARACTER_MESSAGE_RENDERED,
+        event_types.USER_MESSAGE_RENDERED,
     ].filter(Boolean);
 
-    for (const eventType of events) {
-        eventSource.on(eventType, () => setTimeout(scheduleRebuild, 0));
+    for (const eventName of refreshEvents) {
+        eventSource.on(eventName, () => scheduleApply(eventName));
     }
-}
 
-function init() {
-    getSettings();
-    registerCommands();
-    observeChat();
-    hookEvents();
-
-    setTimeout(scheduleRebuild, 250);
-    console.log('[Fold Hidden Floor] loaded');
-}
-
-init();
-
-export function enable() {
-    getSettings().enabled = true;
-    scheduleRebuild();
-}
-
-export function disable() {
-    getSettings().enabled = false;
-    cleanupGroups();
+    scheduleApply('init');
+    console.info('[Hidden Floor Collapse] loaded');
 }
