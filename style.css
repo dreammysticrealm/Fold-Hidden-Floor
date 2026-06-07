@@ -37,7 +37,6 @@
     display: grid;
     grid-template-columns: auto 1fr auto;
     grid-template-areas:
-        "kicker kicker hint"
         "title title range"
         "names names names"
         "preview preview preview";
