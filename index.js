@@ -102,7 +102,7 @@ function createDetailsForGroup(group) {
 
     const hint = document.createElement('span');
     hint.className = 'st-hfc-hint';
-    hint.textContent = '展开';
+    hint.textContent = '点击以展开';
 
     summary.append(title, range, names, preview, hint);
     details.append(summary);
@@ -116,7 +116,7 @@ function syncGroupVisibility(details, group) {
     const collapsed = !details.open;
     details.classList.toggle('is-open', details.open);
     const hint = details.querySelector('.st-hfc-hint');
-    if (hint) hint.textContent = details.open ? '折叠' : '展开';
+    if (hint) hint.textContent = details.open ? '点击以折叠' : '点击以展开';
 
     for (const message of group) {
         message.classList.add(GROUPED_CLASS);
