@@ -4,11 +4,11 @@ import {
     eventSource,
     event_types,
     systemUserName,
-    saveSettingsDebounced,
 } from '/script.js';
 
 import {
     extension_settings,
+    saveSettingsDebounced,
 } from '/scripts/extensions.js';
 
 import { SlashCommandParser } from '/scripts/slash-commands/SlashCommandParser.js';
@@ -82,14 +82,11 @@ function isFoldableHiddenMessage(el) {
     const attrHidden = el.getAttribute('is_system') === 'true';
     const message = getMessageForElement(el);
 
-    // ST's /hide sets chat[messageId].is_system = true and mirrors that into .mes[is_system].
-    // We accept either signal because during render/update one can briefly be ahead of the other.
     const messageHidden = message?.is_system === true;
     if (!attrHidden && !messageHidden) return false;
 
     const settings = getSettings();
 
-    // Do not fold ST's own tiny notices / safety messages unless the user explicitly disables this guard.
     if (settings.excludeSmallSystem && message?.extra?.isSmallSys) return false;
     if (settings.excludeSillyTavernSystem && message?.name === systemUserName) return false;
 
@@ -99,7 +96,9 @@ function isFoldableHiddenMessage(el) {
 function collectVisibleMessageElements() {
     const root = getChatRoot();
     if (!root) return [];
-    return Array.from(root.children).filter(el => el instanceof HTMLElement && el.classList.contains('mes'));
+    return Array.from(root.children).filter(el =>
+        el instanceof HTMLElement && el.classList.contains('mes')
+    );
 }
 
 function cleanup() {
@@ -130,6 +129,40 @@ function summarizeAuthors(ids) {
         .join(' / ');
 }
 
+function setGroupOpen(groupKey, isOpen) {
+    const root = getChatRoot();
+    if (!root) return;
+
+    const summary = root.querySelector(`.${SUMMARY_CLASS}[data-hff-key="${CSS.escape(groupKey)}"]`);
+    const messages = root.querySelectorAll(`.${MESSAGE_MARKER_CLASS}[data-hff-key="${CSS.escape(groupKey)}"]`);
+
+    if (isOpen) {
+        openGroups.add(groupKey);
+    } else {
+        openGroups.delete(groupKey);
+    }
+
+    messages.forEach(el => {
+        el.classList.toggle(COLLAPSED_CLASS, !isOpen);
+    });
+
+    if (summary instanceof HTMLElement) {
+        summary.classList.toggle(OPEN_CLASS, isOpen);
+        summary.setAttribute('aria-expanded', String(isOpen));
+
+        const caret = summary.querySelector('.hff-caret');
+        if (caret) caret.textContent = isOpen ? '▾' : '▸';
+
+        const hint = summary.querySelector('.hff-hint');
+        if (hint) hint.textContent = isOpen ? '点击收起' : '点击展开';
+    }
+}
+
+function toggleGroup(groupKey) {
+    const currentlyOpen = openGroups.has(groupKey);
+    setGroupOpen(groupKey, !currentlyOpen);
+}
+
 function makeSummaryElement(group, isOpen) {
     const [firstId, lastId] = [group.ids[0], group.ids[group.ids.length - 1]];
     const settings = getSettings();
@@ -140,6 +173,7 @@ function makeSummaryElement(group, isOpen) {
     summary.tabIndex = 0;
     summary.setAttribute('role', 'button');
     summary.setAttribute('aria-expanded', String(isOpen));
+    summary.title = '点击展开/收起隐藏楼层';
 
     const icon = document.createElement('span');
     icon.className = 'hff-caret';
@@ -165,44 +199,48 @@ function makeSummaryElement(group, isOpen) {
 
     summary.append(icon, title, meta, preview, hint);
 
-    const toggle = (event) => {
+    summary.addEventListener('click', event => {
         event.preventDefault();
         event.stopPropagation();
+        toggleGroup(group.key);
+    }, true);
 
-        if (openGroups.has(group.key)) {
-            openGroups.delete(group.key);
-        } else {
-            openGroups.add(group.key);
+    summary.addEventListener('pointerup', event => {
+        event.preventDefault();
+        event.stopPropagation();
+    }, true);
+
+    summary.addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            event.stopPropagation();
+            toggleGroup(group.key);
         }
-
-        scheduleFold();
-    };
-
-    summary.addEventListener('click', toggle);
-    summary.addEventListener('keydown', (event) => {
-        if (event.key === 'Enter' || event.key === ' ') toggle(event);
-    });
+    }, true);
 
     return summary;
 }
 
 function buildGroups(messageElements) {
-    /** @type {{elements: HTMLElement[], ids: number[], key: string}[]} */
     const groups = [];
     let current = [];
 
     const flush = () => {
         if (!current.length) return;
+
         const ids = current.map(getMessageId).filter(id => id !== null);
+
         if (!ids.length) {
             current = [];
             return;
         }
+
         groups.push({
             elements: current,
             ids,
             key: `${ids[0]}-${ids[ids.length - 1]}`,
         });
+
         current = [];
     };
 
@@ -244,10 +282,7 @@ function applyFold() {
                 el.classList.add(MESSAGE_MARKER_CLASS);
                 el.dataset.hffKey = group.key;
                 el.dataset.hffIndex = String(index);
-
-                if (!isOpen) {
-                    el.classList.add(COLLAPSED_CLASS);
-                }
+                el.classList.toggle(COLLAPSED_CLASS, !isOpen);
             });
         }
     } finally {
@@ -270,16 +305,18 @@ function observeChat() {
     const root = getChatRoot();
     if (!root || observer) return;
 
-    observer = new MutationObserver((mutations) => {
+    observer = new MutationObserver(mutations => {
         if (applying) return;
 
         const relevant = mutations.some(mutation => {
             if (mutation.type === 'childList') return true;
+
             if (mutation.type === 'attributes') {
                 const target = mutation.target;
                 return target instanceof HTMLElement
-                    && (target.classList.contains('mes') || target.closest('.mes'));
+                    && target.classList.contains('mes');
             }
+
             return false;
         });
 
@@ -288,9 +325,9 @@ function observeChat() {
 
     observer.observe(root, {
         childList: true,
-        subtree: true,
+        subtree: false,
         attributes: true,
-        attributeFilter: ['is_system', 'mesid', 'class'],
+        attributeFilter: ['is_system', 'mesid'],
     });
 }
 
@@ -360,21 +397,7 @@ function registerCommands() {
             }
         },
         [],
-        `
-        <div>
-            Automatically folds consecutive hidden messages into grouped, details-like summary rows.
-        </div>
-        <div>
-            <strong>Examples:</strong>
-            <ul>
-                <li><pre><code>/hiddenfold on</code></pre></li>
-                <li><pre><code>/hiddenfold off</code></pre></li>
-                <li><pre><code>/hiddenfold toggle</code></pre></li>
-                <li><pre><code>/hiddenfold closed</code></pre></li>
-                <li><pre><code>/hiddenfold open</code></pre></li>
-            </ul>
-        </div>
-        `,
+        'Fold consecutive hidden messages into grouped summary rows.',
     );
 
     SlashCommandParser.addCommand(
@@ -412,7 +435,6 @@ function init() {
     observeChat();
     initEventHooks();
 
-    // First pass after ST has rendered the current chat.
     setTimeout(scheduleFold, 250);
 
     console.log('[Hidden Floor Fold] loaded');
