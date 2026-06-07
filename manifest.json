@@ -1,0 +1,12 @@
+{
+    "display_name": "Hidden Floor Fold",
+    "loading_order": 50,
+    "requires": [],
+    "optional": [],
+    "js": "index.js",
+    "css": "style.css",
+    "author": "ChatGPT for Samia",
+    "version": "0.1.0",
+    "homePage": "https://github.com/your-name/ST-HiddenFloorFold",
+    "description": "Automatically collapses consecutive hidden SillyTavern messages into one details-like fold."
+}
