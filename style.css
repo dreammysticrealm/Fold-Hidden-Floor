@@ -77,15 +77,6 @@
     margin-top: 0.42rem;
 }
 
-#chat .st-hfc-kicker {
-    grid-area: kicker;
-    text-transform: uppercase;
-    letter-spacing: 0.18em;
-    font-size: 0.62rem;
-    font-weight: 800;
-    color: var(--st-hfc-accent);
-}
-
 #chat .st-hfc-title {
     grid-area: title;
     font-family: Georgia, "Times New Roman", serif;
