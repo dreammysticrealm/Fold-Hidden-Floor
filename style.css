@@ -1,75 +1,236 @@
+/* Fold Hidden Floor — 高级深色杂志风样式 (Premium Dark Editorial Style) */
+
+.hff-group {
+    /* 
+       定义本地色彩变量，方便后续全局微调。
+       如果希望融入原有的主题色，可以把下面的变量值替换为 var(--SmartTheme...) 
+    */
+    --hff-bg-dark: #0e0f12;               /* 杂志暗色背景 */
+    --hff-bg-hover: #15171c;              /* 悬停时的微光深灰 */
+    --hff-text-title: #ffffff;            /* 纯白高亮标题 */
+    --hff-text-muted: #94a3b8;            /* 优雅的正文/预览灰 */
+    --hff-text-subtle: #64748b;           /* 弱化的元数据灰 */
+    --hff-accent: #c5a880;                /* 复古黄铜/香槟金 (核心点缀色) */
+    --hff-border: rgba(255, 255, 255, 0.07);/* 纤细的纸张分割线 */
+
+    margin: 1.6rem 0.75rem;
+    padding: 0;
+    border: 0;
+    background: var(--hff-bg-dark);
+    color: var(--hff-text-muted);
+}
+
+.hff-group > .hff-summary {
+    list-style: none;
+}
+
+.hff-group > .hff-summary::-webkit-details-marker {
+    display: none;
+}
+
 .hff-summary {
     display: grid;
-    grid-template-columns: auto auto 1fr auto;
-    align-items: center;
-    gap: 0.45em;
-    margin: 0.45em 0.75em;
-    padding: 0.45em 0.65em;
-    border: 1px solid color-mix(in srgb, var(--SmartThemeBorderColor, #888) 65%, transparent);
-    border-radius: 9px;
-    background: color-mix(in srgb, var(--SmartThemeBlurTintColor, #222) 82%, transparent);
-    color: var(--SmartThemeBodyColor, inherit);
+    grid-template-columns: max-content 1fr max-content;
+    grid-template-areas:
+        "marker title range"
+        "line preview action"
+        "line authors action";
+    gap: 0.35rem 0.85rem;
+    align-items: baseline;
+    padding: 1.1rem 0.6rem 1.1rem;
+    
+    /* 顶部采用杂志经典的双实线设计 */
+    border-top: 3px double var(--hff-accent);
+    border-bottom: 1px solid var(--hff-border);
+    
+    /* 极微弱的香槟金左侧渐变光晕 */
+    background: linear-gradient(
+        90deg,
+        rgba(197, 168, 128, 0.04),
+        transparent 50%
+    );
     cursor: pointer;
-    opacity: 0.88;
     user-select: none;
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
 
-.hff-summary:hover,
-.hff-summary:focus {
-    opacity: 1;
-    outline: 1px solid color-mix(in srgb, var(--SmartThemeQuoteColor, #aaa) 70%, transparent);
+/* 悬停交互：背景微亮，标题颜色转为金铜色 */
+.hff-summary:hover {
+    background-color: var(--hff-bg-hover);
+    border-bottom-color: rgba(255, 255, 255, 0.15);
 }
 
-.hff-summary .hff-caret {
-    font-size: 0.95em;
+.hff-summary:hover .hff-title {
+    color: var(--hff-accent);
+}
+
+.hff-summary:focus-visible {
+    outline: 1px solid var(--hff-accent);
+    outline-offset: 3px;
+}
+
+/* 左上角分类标记：精致的空心框 */
+.hff-marker {
+    grid-area: marker;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.62rem;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--hff-accent);
+    padding: 0.15rem 0.45rem;
+    border: 1px solid var(--hff-accent);
     opacity: 0.9;
 }
 
-.hff-summary .hff-title {
+/* 标题：优雅、厚重的衬线大字 */
+.hff-title {
+    grid-area: title;
+    font-family: "Playfair Display", "Didot", "Garamond", Georgia, "Times New Roman", serif;
+    font-size: clamp(1.15rem, 2vw, 1.5rem);
+    font-weight: 700;
+    letter-spacing: -0.015em; /* 稍微拉近字距，更有印刷感 */
+    line-height: 1.1;
+    color: var(--hff-text-title);
+    transition: color 0.25s ease;
+}
+
+/* 页码范围 */
+.hff-range {
+    grid-area: range;
+    justify-self: end;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--hff-accent);
+    opacity: 0.8;
+    white-space: nowrap;
+}
+
+/* 左侧精致的分割立线 */
+.hff-summary::before {
+    content: "";
+    grid-area: line;
+    align-self: stretch;
+    width: 1px; /* 减薄至1px更显精致 */
+    min-height: 2.2rem;
+    background: linear-gradient(
+        to bottom,
+        var(--hff-accent),
+        rgba(197, 168, 128, 0.1)
+    );
+    transform: translateX(0.42rem);
+}
+
+/* 正文预览：斜体衬线，模拟杂志引言 (Excerpt) */
+.hff-preview {
+    grid-area: preview;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: "Garamond", Georgia, serif;
+    font-size: 0.9rem;
+    font-style: italic;
+    color: var(--hff-text-muted);
+}
+
+/* 署名区：现代冷淡风，增加 WRITTEN BY 标识 */
+.hff-authors {
+    grid-area: authors;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 0.65rem;
     font-weight: 600;
-    white-space: nowrap;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--hff-text-subtle);
 }
 
-.hff-summary .hff-meta {
-    opacity: 0.75;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+.hff-authors::before {
+    content: "WRITTEN BY / ";
+    color: var(--hff-accent);
+    font-weight: 500;
+    opacity: 0.8;
 }
 
-.hff-summary .hff-preview {
-    grid-column: 1 / -1;
-    opacity: 0.65;
-    font-size: 0.9em;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+/* 展开折叠的操作字样 */
+.hff-action {
+    grid-area: action;
+    justify-self: end;
+    align-self: center;
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    color: var(--hff-accent);
 }
 
-.hff-summary .hff-hint {
-    opacity: 0.55;
-    font-size: 0.85em;
-    white-space: nowrap;
+.hff-group:not([open]) .hff-action::before {
+    content: "[ + ]";
 }
 
-.hff-hidden-collapsed {
+.hff-group[open] .hff-action::before {
+    content: "[ − ]";
+}
+
+.hff-collapsed {
     display: none !important;
 }
 
-.hff-hidden-message:not(.hff-hidden-collapsed) {
-    outline: 1px dashed color-mix(in srgb, var(--SmartThemeQuoteColor, #aaa) 55%, transparent);
-    outline-offset: -2px;
+/* 展开后的隐藏信息区域 */
+.hff-hidden-message:not(.hff-collapsed) {
+    margin: 0.5rem 0 1rem 1.25rem;
+    padding: 0.8rem 1.2rem;
+    border-left: 2px solid var(--hff-accent);
+    background: rgba(255, 255, 255, 0.01); /* 极其轻微的底色区分 */
+    color: var(--hff-text-muted);
+    font-size: 0.94rem;
+    line-height: 1.6;
+    
+    /* 顺滑展开动效 */
+    animation: hffFadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-@media (max-width: 640px) {
-    .hff-summary {
-        grid-template-columns: auto 1fr auto;
-        margin-left: 0.4em;
-        margin-right: 0.4em;
+@keyframes hffFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 响应式断点 */
+@media (max-width: 700px) {
+    .hff-group {
+        margin-left: 0.35rem;
+        margin-right: 0.35rem;
     }
 
-    .hff-summary .hff-meta {
-        grid-column: 2 / -1;
-        font-size: 0.85em;
+    .hff-summary {
+        grid-template-columns: 1fr max-content;
+        grid-template-areas:
+            "marker range"
+            "title title"
+            "preview preview"
+            "authors action";
+        gap: 0.4rem 0.6rem;
+        padding: 0.9rem 0.5rem;
+    }
+
+    .hff-summary::before {
+        display: none;
+    }
+
+    .hff-title {
+        font-size: 1.15rem;
+    }
+    
+    .hff-hidden-message:not(.hff-collapsed) {
+        margin-left: 0.5rem;
     }
 }
