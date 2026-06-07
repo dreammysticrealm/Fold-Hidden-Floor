@@ -1,0 +1,160 @@
+/* Fold Hidden Floor — magazine-style hidden message groups */
+
+.hff-group {
+    margin: 1.1rem 0.75rem;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--SmartThemeBodyColor, inherit);
+}
+
+.hff-group > .hff-summary {
+    list-style: none;
+}
+
+.hff-group > .hff-summary::-webkit-details-marker {
+    display: none;
+}
+
+.hff-summary {
+    display: grid;
+    grid-template-columns: max-content 1fr max-content;
+    grid-template-areas:
+        "marker title range"
+        "line preview action"
+        "line authors action";
+    gap: 0.18rem 0.75rem;
+    align-items: baseline;
+    padding: 0.65rem 0.15rem 0.7rem;
+    border-top: 1px solid color-mix(in srgb, var(--SmartThemeBodyColor, #ddd) 28%, transparent);
+    border-bottom: 1px solid color-mix(in srgb, var(--SmartThemeBodyColor, #ddd) 18%, transparent);
+    background:
+        linear-gradient(
+            90deg,
+            color-mix(in srgb, var(--SmartThemeQuoteColor, #aaa) 10%, transparent),
+            transparent 42%
+        );
+    cursor: pointer;
+    user-select: none;
+}
+
+.hff-summary:hover {
+    border-top-color: color-mix(in srgb, var(--SmartThemeQuoteColor, #aaa) 70%, transparent);
+}
+
+.hff-summary:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--SmartThemeQuoteColor, #aaa) 80%, transparent);
+    outline-offset: 3px;
+}
+
+.hff-marker {
+    grid-area: marker;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    opacity: 0.78;
+    padding: 0.12rem 0.32rem;
+    border: 1px solid currentColor;
+}
+
+.hff-title {
+    grid-area: title;
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: clamp(1.05rem, 1.8vw, 1.45rem);
+    font-weight: 600;
+    letter-spacing: 0.015em;
+    line-height: 1.05;
+}
+
+.hff-range {
+    grid-area: range;
+    justify-self: end;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.82rem;
+    opacity: 0.72;
+    white-space: nowrap;
+}
+
+.hff-summary::before {
+    content: "";
+    grid-area: line;
+    align-self: stretch;
+    width: 2px;
+    min-height: 2.4rem;
+    background: color-mix(in srgb, var(--SmartThemeQuoteColor, #aaa) 55%, transparent);
+    transform: translateX(0.42rem);
+}
+
+.hff-preview {
+    grid-area: preview;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.94rem;
+    opacity: 0.86;
+    font-style: italic;
+}
+
+.hff-authors {
+    grid-area: authors;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.74rem;
+    letter-spacing: 0.04em;
+    opacity: 0.58;
+}
+
+.hff-action {
+    grid-area: action;
+    justify-self: end;
+    align-self: center;
+    font-size: 0.78rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    opacity: 0.72;
+}
+
+.hff-group:not([open]) .hff-action::before {
+    content: "＋ ";
+}
+
+.hff-group[open] .hff-action::before {
+    content: "－ ";
+}
+
+.hff-collapsed {
+    display: none !important;
+}
+
+.hff-hidden-message:not(.hff-collapsed) {
+    margin-left: 1.25rem;
+    border-left: 2px solid color-mix(in srgb, var(--SmartThemeQuoteColor, #aaa) 35%, transparent);
+}
+
+@media (max-width: 700px) {
+    .hff-group {
+        margin-left: 0.35rem;
+        margin-right: 0.35rem;
+    }
+
+    .hff-summary {
+        grid-template-columns: 1fr max-content;
+        grid-template-areas:
+            "marker range"
+            "title title"
+            "preview preview"
+            "authors action";
+        gap: 0.28rem 0.6rem;
+    }
+
+    .hff-summary::before {
+        display: none;
+    }
+
+    .hff-title {
+        font-size: 1.12rem;
+    }
+}

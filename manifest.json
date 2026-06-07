@@ -1,0 +1,12 @@
+{
+    "display_name": "Fold Hidden Floor",
+    "loading_order": 50,
+    "requires": [],
+    "optional": [],
+    "js": "index.js",
+    "css": "style.css",
+    "author": "ChatGPT for Samia",
+    "version": "0.2.0",
+    "homePage": "https://github.com/dreammysticrealm/Fold-Hidden-Floor",
+    "description": "Automatically collapses consecutive hidden SillyTavern messages into magazine-style folds."
+}
