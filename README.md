@@ -1,6 +1,6 @@
 # ST-HiddenFloorCollapse
 
-中文|[English](#english)
+中文 | [English](#english)
 
 一个SillyTavern第三方扩展，用来把连续隐藏的聊天楼层自动合并成一个可展开/折叠的杂志风折叠块。
 
