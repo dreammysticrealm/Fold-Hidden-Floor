@@ -10,26 +10,14 @@ const CHAT_SELECTOR = '#chat';
 const DETAILS_CLASS = 'st-hfc-details';
 const GROUPED_CLASS = 'st-hfc-grouped-message';
 const COLLAPSED_CLASS = 'st-hfc-collapsed-message';
-const HIDDEN_SELECTOR = '.mes[is_system="true"]';
 
 let observer = null;
 let scheduled = false;
 let suppressMutationObserver = false;
 let initialized = false;
 
-// Streaming / fake-streaming guard.
-// Rebuilding folds while SillyTavern is streaming can interfere with the active
-// message DOM node that ST keeps updating. So we postpone DOM rebuilds until
-// generation is fully over.
-let generationActive = false;
-let pendingApplyAfterGeneration = false;
-
 function getChatElement() {
     return document.querySelector(CHAT_SELECTOR);
-}
-
-function isGenerationRunning() {
-    return generationActive || document.body.dataset.generating === 'true';
 }
 
 function isOurDetails(node) {
@@ -68,10 +56,12 @@ function getMessagePreview(messageElement) {
 
 function summarizeNames(group) {
     const counts = new Map();
+
     for (const message of group) {
         const name = getMessageName(message);
         counts.set(name, (counts.get(name) || 0) + 1);
     }
+
     return Array.from(counts.entries())
         .slice(0, 4)
         .map(([name, count]) => `${name} × ${count}`)
@@ -81,7 +71,9 @@ function summarizeNames(group) {
 function summarizeRange(group) {
     const firstId = getMessageId(group[0]);
     const lastId = getMessageId(group[group.length - 1]);
+
     if (firstId === null || lastId === null) return '';
+
     return firstId === lastId ? `#${firstId}` : `#${firstId}–#${lastId}`;
 }
 
@@ -112,8 +104,11 @@ function createDetailsForGroup(group) {
 
     const preview = document.createElement('span');
     preview.className = 'st-hfc-preview';
+
     const firstPreview = getMessagePreview(group[0]);
-    preview.textContent = firstPreview ? `“${firstPreview.slice(0, 88)}${firstPreview.length > 88 ? '…' : ''}”` : '点击展开查看隐藏楼层';
+    preview.textContent = firstPreview
+        ? `“${firstPreview.slice(0, 88)}${firstPreview.length > 88 ? '…' : ''}”`
+        : '点击展开查看隐藏楼层';
 
     const hint = document.createElement('span');
     hint.className = 'st-hfc-hint';
@@ -129,9 +124,13 @@ function createDetailsForGroup(group) {
 
 function syncGroupVisibility(details, group) {
     const collapsed = !details.open;
+
     details.classList.toggle('is-open', details.open);
+
     const hint = details.querySelector('.st-hfc-hint');
-    if (hint) hint.textContent = details.open ? '点击以折叠' : '点击以展开';
+    if (hint) {
+        hint.textContent = details.open ? '点击以折叠' : '点击以展开';
+    }
 
     for (const message of group) {
         message.classList.add(GROUPED_CLASS);
@@ -141,6 +140,7 @@ function syncGroupVisibility(details, group) {
 
 function cleanupExistingFolds(chat) {
     chat.querySelectorAll(`:scope > .${DETAILS_CLASS}`).forEach(node => node.remove());
+
     chat.querySelectorAll(`:scope > .mes.${GROUPED_CLASS}, :scope > .mes.${COLLAPSED_CLASS}`).forEach(node => {
         node.classList.remove(GROUPED_CLASS, COLLAPSED_CLASS);
     });
@@ -164,22 +164,22 @@ function findHiddenGroups(chat) {
         }
     }
 
-    if (current.length) groups.push(current);
+    if (current.length) {
+        groups.push(current);
+    }
+
     return groups;
 }
 
-function applyHiddenFloorCollapse({ force = false } = {}) {
+function applyHiddenFloorCollapse() {
     const chat = getChatElement();
     if (!chat) return;
 
-    if (!force && isGenerationRunning()) {
-        pendingApplyAfterGeneration = true;
-        return;
-    }
-
     suppressMutationObserver = true;
+
     try {
         cleanupExistingFolds(chat);
+
         const groups = findHiddenGroups(chat);
 
         for (const group of groups) {
@@ -194,63 +194,20 @@ function applyHiddenFloorCollapse({ force = false } = {}) {
     }
 }
 
-function scheduleApply(reason = 'unknown', { force = false } = {}) {
-    if (!force && isGenerationRunning()) {
-        pendingApplyAfterGeneration = true;
-        return;
-    }
-
+function scheduleApply(reason = 'unknown') {
     if (scheduled) return;
+
     scheduled = true;
 
     requestAnimationFrame(() => {
         scheduled = false;
+
         try {
-            applyHiddenFloorCollapse({ force });
+            applyHiddenFloorCollapse();
         } catch (error) {
             console.error(`[${MODULE_NAME}] Failed to apply folds after ${reason}:`, error);
         }
     });
-}
-
-function flushPendingApplyAfterGeneration(attempt = 0) {
-    const delay = attempt === 0 ? 120 : 100;
-
-    setTimeout(() => {
-        // SillyTavern may still be finalizing the generated message for a short moment.
-        // Wait instead of touching the chat DOM too early.
-        if (isGenerationRunning()) {
-            if (attempt < 20) {
-                flushPendingApplyAfterGeneration(attempt + 1);
-                return;
-            }
-
-            // Fallback: if ST's generating flag somehow gets stuck, force one rebuild.
-            console.warn(`[${MODULE_NAME}] Generation flag stayed active; forcing fold rebuild.`);
-        }
-
-        if (!pendingApplyAfterGeneration && attempt === 0) return;
-
-        pendingApplyAfterGeneration = false;
-        scheduleApply('generation-finished', { force: true });
-    }, delay);
-}
-
-function setupGenerationGuards() {
-    eventSource.on(event_types.GENERATION_STARTED, () => {
-        generationActive = true;
-        pendingApplyAfterGeneration = true;
-    });
-
-    const finishGeneration = () => {
-        generationActive = false;
-
-        if (!pendingApplyAfterGeneration) return;
-        flushPendingApplyAfterGeneration();
-    };
-
-    eventSource.on(event_types.GENERATION_ENDED, finishGeneration);
-    eventSource.on(event_types.GENERATION_STOPPED, finishGeneration);
 }
 
 function setupMutationObserver() {
@@ -260,18 +217,25 @@ function setupMutationObserver() {
     observer = new MutationObserver((mutations) => {
         if (suppressMutationObserver) return;
 
+        // Hard safety: never rebuild folds while SillyTavern is generating.
+        // /hide and /unhide should not normally happen during generation anyway.
+        if (document.body.dataset.generating === 'true') return;
+
         const relevant = mutations.some((mutation) => {
-            if (mutation.type === 'childList') return true;
-            if (mutation.type === 'attributes' && mutation.attributeName === 'is_system') return true;
-            return false;
+            return mutation.type === 'attributes'
+                && mutation.attributeName === 'is_system'
+                && mutation.target instanceof HTMLElement
+                && mutation.target.classList.contains('mes');
         });
 
-        if (relevant) scheduleApply('mutation');
+        if (relevant) {
+            scheduleApply('is_system-changed');
+        }
     });
 
     observer.observe(chat, {
-        childList: true,
-        subtree: false,
+        childList: false,
+        subtree: true,
         attributes: true,
         attributeFilter: ['is_system'],
     });
@@ -279,13 +243,17 @@ function setupMutationObserver() {
 
 function openAllFolds() {
     document.querySelectorAll(`${CHAT_SELECTOR} > .${DETAILS_CLASS}`).forEach((details) => {
-        if (details instanceof HTMLDetailsElement) details.open = true;
+        if (details instanceof HTMLDetailsElement) {
+            details.open = true;
+        }
     });
 }
 
 function closeAllFolds() {
     document.querySelectorAll(`${CHAT_SELECTOR} > .${DETAILS_CLASS}`).forEach((details) => {
-        if (details instanceof HTMLDetailsElement) details.open = false;
+        if (details instanceof HTMLDetailsElement) {
+            details.open = false;
+        }
     });
 }
 
@@ -326,7 +294,6 @@ export function init() {
     initialized = true;
 
     setupMutationObserver();
-    setupGenerationGuards();
     registerSlashCommands();
 
     const refreshEvents = [
@@ -334,15 +301,6 @@ export function init() {
         event_types.CHAT_CHANGED,
         event_types.CHAT_LOADED,
         event_types.MORE_MESSAGES_LOADED,
-        event_types.MESSAGE_RECEIVED,
-        event_types.MESSAGE_SENT,
-        event_types.MESSAGE_UPDATED,
-        event_types.MESSAGE_EDITED,
-        event_types.MESSAGE_DELETED,
-        event_types.MESSAGE_SWIPED,
-        event_types.MESSAGE_SWIPE_DELETED,
-        event_types.CHARACTER_MESSAGE_RENDERED,
-        event_types.USER_MESSAGE_RENDERED,
     ].filter(Boolean);
 
     for (const eventName of refreshEvents) {
@@ -350,5 +308,6 @@ export function init() {
     }
 
     scheduleApply('init');
+
     console.info('[Hidden Floor Collapse] loaded');
 }
