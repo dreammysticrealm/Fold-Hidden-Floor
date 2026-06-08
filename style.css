@@ -1,145 +1,142 @@
-/* Hidden Floor Collapse — Elegant Magazine Editorial Style */
+/* Hidden Floor Collapse — magazine-style fold cards using SillyTavern theme colors */
 
 #chat > .mes.st-hfc-collapsed-message {
     display: none !important;
 }
 
-/* 展开后的隐藏消息左侧加上一条优雅的细线，表示引用层级 */
 #chat > .mes.st-hfc-grouped-message {
-    border-left: 2px solid var(--SmartThemeQuoteColor, currentColor);
-    margin-left: 0.5rem;
-    padding-left: 1rem;
+    border-left: 2px solid color-mix(in srgb, var(--SmartThemeQuoteColor, currentColor) 55%, transparent);
+    margin-left: 0.35rem;
+    padding-left: 0.35rem;
 }
 
-/* 主体容器：去背景、去阴影、经典的粗顶线与细底线 */
 #chat > details.st-hfc-details {
     --st-hfc-ink: var(--SmartThemeBodyColor, currentColor);
     --st-hfc-accent: var(--SmartThemeQuoteColor, var(--SmartThemeEmColor, currentColor));
-    --st-hfc-muted: color-mix(in srgb, var(--st-hfc-ink) 50%, transparent);
+    --st-hfc-muted: color-mix(in srgb, var(--st-hfc-ink) 62%, transparent);
+    --st-hfc-hairline: color-mix(in srgb, var(--st-hfc-accent) 42%, transparent);
+    --st-hfc-paper: color-mix(in srgb, var(--SmartThemeBlurTintColor, transparent) 55%, transparent);
 
     display: block;
-    margin: 2rem 0; /* 增加上下留白，营造呼吸感 */
-    padding: 0;
-    background: transparent;
-    border-top: 4px solid var(--st-hfc-ink); /* 杂志风加粗顶栏 */
-    border-bottom: 1px solid var(--st-hfc-muted); /* 细底栏 */
     color: var(--st-hfc-ink);
-    border-radius: 0;
-    box-shadow: none;
-    transition: margin 0.3s ease;
+    margin: 0.9rem 0 0.9rem 0;
+    border: 1px solid var(--st-hfc-hairline);
+    border-left: 0.45rem solid var(--st-hfc-accent);
+    border-radius: 0.35rem;
+    background:
+        linear-gradient(135deg, color-mix(in srgb, var(--st-hfc-accent) 13%, transparent), transparent 45%),
+        var(--st-hfc-paper);
+    box-shadow:
+        0 0.45rem 1.2rem rgba(0, 0, 0, 0.10),
+        inset 0 1px 0 color-mix(in srgb, white 15%, transparent);
+    overflow: clip;
 }
 
-/* 内部网格重构：干净利落的左对齐 */
 #chat > details.st-hfc-details > summary.st-hfc-summary {
     position: relative;
     display: grid;
     grid-template-columns: auto 1fr auto;
     grid-template-areas:
         "kicker kicker hint"
-        "title title title"
-        "range names names"
+        "title title range"
+        "names names names"
         "preview preview preview";
-    gap: 0.5rem 1rem;
+    gap: 0.2rem 0.75rem;
     align-items: baseline;
-    padding: 0.8rem 0; /* 取消左右内边距，让文字与顶线完美对齐 */
+    padding: 0.8rem 1rem 0.75rem 2.55rem;
     cursor: pointer;
     user-select: none;
     list-style: none;
 }
 
-/* 隐藏默认的原点/三角箭头 */
-#chat > details.st-hfc-details > summary.st-hfc-summary::-webkit-details-marker,
-#chat > details.st-hfc-details > summary.st-hfc-summary::before,
-#chat > details.st-hfc-details > summary.st-hfc-summary::after {
+#chat > details.st-hfc-details > summary.st-hfc-summary::-webkit-details-marker {
     display: none;
-    content: none;
 }
 
-/* KICKER (引题)：小号、全大写、宽字距 */
+#chat > details.st-hfc-details > summary.st-hfc-summary::before {
+    content: "▸";
+    position: absolute;
+    left: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--st-hfc-accent);
+    font-size: 1.15rem;
+    line-height: 1;
+    transition: transform 160ms ease;
+}
+
+#chat > details.st-hfc-details[open] > summary.st-hfc-summary::before {
+    transform: translateY(-50%) rotate(90deg);
+}
+
+#chat > details.st-hfc-details > summary.st-hfc-summary::after {
+    content: "";
+    grid-column: 1 / -1;
+    height: 1px;
+    background: linear-gradient(90deg, var(--st-hfc-accent), transparent 75%);
+    opacity: 0.65;
+    margin-top: 0.42rem;
+}
+
 #chat .st-hfc-kicker {
     grid-area: kicker;
-    font-family: system-ui, -apple-system, sans-serif;
     text-transform: uppercase;
-    letter-spacing: 0.2em;
-    font-size: 0.65rem;
-    font-weight: 700;
+    letter-spacing: 0.18em;
+    font-size: 0.62rem;
+    font-weight: 800;
     color: var(--st-hfc-accent);
 }
 
-/* TITLE (主标题)：大号斜体衬线字体，视觉核心 */
 #chat .st-hfc-title {
     grid-area: title;
-    font-family: "Playfair Display", Georgia, "Times New Roman", serif;
-    font-size: clamp(1.6rem, 3vw, 2.2rem);
-    font-weight: 400;
-    font-style: italic;
-    line-height: 1.1;
-    margin: 0.2rem 0 0.8rem 0; /* 与下方元素拉开距离 */
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: clamp(1.05rem, 2vw, 1.45rem);
+    font-weight: 700;
+    line-height: 1.05;
 }
 
-/* RANGE (楼层序号)：干练的细线框标签 */
 #chat .st-hfc-range {
     grid-area: range;
-    font-family: monospace;
-    font-size: 0.75rem;
-    padding: 0.15rem 0.5rem;
-    border: 1px solid var(--st-hfc-muted);
-    border-radius: 2px;
-    color: var(--st-hfc-ink);
-    opacity: 0.8;
+    justify-self: end;
+    padding: 0.12rem 0.5rem;
+    border: 1px solid var(--st-hfc-hairline);
+    border-radius: 999px;
+    color: var(--st-hfc-accent);
+    font-size: 0.78rem;
+    font-variant-numeric: tabular-nums;
 }
 
-/* NAMES (参与角色)：低调的无衬线体 */
 #chat .st-hfc-names {
     grid-area: names;
-    font-family: system-ui, -apple-system, sans-serif;
-    font-size: 0.75rem;
-    font-weight: 500;
-    letter-spacing: 0.05em;
-    color: var(--st-hfc-ink);
-    opacity: 0.8;
+    color: var(--st-hfc-muted);
+    font-size: 0.82rem;
+    letter-spacing: 0.02em;
 }
 
-/* PREVIEW (摘要内容)：衬线体，上方加入虚线分隔符 */
 #chat .st-hfc-preview {
     grid-area: preview;
-    font-family: Georgia, "Times New Roman", serif;
-    color: var(--st-hfc-muted);
-    font-size: 0.95rem;
-    line-height: 1.5;
+    color: color-mix(in srgb, var(--st-hfc-ink) 74%, transparent);
+    font-size: 0.82rem;
+    font-style: italic;
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
-    padding-top: 0.8rem;
-    margin-top: 0.2rem;
-    border-top: 1px dashed color-mix(in srgb, var(--st-hfc-muted) 40%, transparent); 
 }
 
-/* HINT (展开/折叠提示)：置于右上角 */
 #chat .st-hfc-hint {
     grid-area: hint;
     justify-self: end;
-    font-family: system-ui, -apple-system, sans-serif;
     text-transform: uppercase;
-    letter-spacing: 0.1em;
-    font-size: 0.65rem;
-    font-weight: 600;
-    color: var(--st-hfc-accent);
+    letter-spacing: 0.12em;
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: var(--st-hfc-muted);
 }
 
-/* ---- 展开状态互动效果 ---- */
-
-/* 展开后，隐藏 Preview 摘要，因为真正的消息已经露出来了，避免信息重复 */
-#chat > details.st-hfc-details[open] .st-hfc-preview {
-    display: none;
-}
-
-/* 展开后取消底线，让盒子"融入"正文，过渡更加自然 */
 #chat > details.st-hfc-details[open] {
-    margin-bottom: 0.5rem;
-    border-bottom-color: transparent; 
+    margin-bottom: 0.45rem;
 }
 
 #chat > details.st-hfc-details[open] + .mes.st-hfc-grouped-message {
-    margin-top: 0.5rem;
+    margin-top: 0.35rem;
 }
