@@ -17,8 +17,19 @@ let scheduled = false;
 let suppressMutationObserver = false;
 let initialized = false;
 
+// Streaming / fake-streaming guard.
+// Rebuilding folds while SillyTavern is streaming can interfere with the active
+// message DOM node that ST keeps updating. So we postpone DOM rebuilds until
+// generation is fully over.
+let generationActive = false;
+let pendingApplyAfterGeneration = false;
+
 function getChatElement() {
     return document.querySelector(CHAT_SELECTOR);
+}
+
+function isGenerationRunning() {
+    return generationActive || document.body.dataset.generating === 'true';
 }
 
 function isOurDetails(node) {
@@ -157,9 +168,14 @@ function findHiddenGroups(chat) {
     return groups;
 }
 
-function applyHiddenFloorCollapse() {
+function applyHiddenFloorCollapse({ force = false } = {}) {
     const chat = getChatElement();
     if (!chat) return;
+
+    if (!force && isGenerationRunning()) {
+        pendingApplyAfterGeneration = true;
+        return;
+    }
 
     suppressMutationObserver = true;
     try {
@@ -178,17 +194,63 @@ function applyHiddenFloorCollapse() {
     }
 }
 
-function scheduleApply(reason = 'unknown') {
+function scheduleApply(reason = 'unknown', { force = false } = {}) {
+    if (!force && isGenerationRunning()) {
+        pendingApplyAfterGeneration = true;
+        return;
+    }
+
     if (scheduled) return;
     scheduled = true;
+
     requestAnimationFrame(() => {
         scheduled = false;
         try {
-            applyHiddenFloorCollapse();
+            applyHiddenFloorCollapse({ force });
         } catch (error) {
             console.error(`[${MODULE_NAME}] Failed to apply folds after ${reason}:`, error);
         }
     });
+}
+
+function flushPendingApplyAfterGeneration(attempt = 0) {
+    const delay = attempt === 0 ? 120 : 100;
+
+    setTimeout(() => {
+        // SillyTavern may still be finalizing the generated message for a short moment.
+        // Wait instead of touching the chat DOM too early.
+        if (isGenerationRunning()) {
+            if (attempt < 20) {
+                flushPendingApplyAfterGeneration(attempt + 1);
+                return;
+            }
+
+            // Fallback: if ST's generating flag somehow gets stuck, force one rebuild.
+            console.warn(`[${MODULE_NAME}] Generation flag stayed active; forcing fold rebuild.`);
+        }
+
+        if (!pendingApplyAfterGeneration && attempt === 0) return;
+
+        pendingApplyAfterGeneration = false;
+        scheduleApply('generation-finished', { force: true });
+    }, delay);
+}
+
+function setupGenerationGuards() {
+    eventSource.on(event_types.GENERATION_STARTED, () => {
+        generationActive = true;
+        pendingApplyAfterGeneration = true;
+    });
+
+    const finishGeneration = () => {
+        generationActive = false;
+
+        if (!pendingApplyAfterGeneration) return;
+        flushPendingApplyAfterGeneration();
+    };
+
+    eventSource.on(event_types.GENERATION_ENDED, finishGeneration);
+    eventSource.on(event_types.GENERATION_STOPPED, finishGeneration);
 }
 
 function setupMutationObserver() {
@@ -264,6 +326,7 @@ export function init() {
     initialized = true;
 
     setupMutationObserver();
+    setupGenerationGuards();
     registerSlashCommands();
 
     const refreshEvents = [
